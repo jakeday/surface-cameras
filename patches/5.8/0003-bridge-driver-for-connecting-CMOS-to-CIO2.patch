@@ -1,3 +1,17 @@
+From edc882f249e1d7a292dccb44dfedfd23f7ba6f80 Mon Sep 17 00:00:00 2001
+From: Jake Day <jake@ninebysix.com>
+Date: Wed, 23 Sep 2020 11:19:46 -0400
+Subject: [PATCH 4/4] bridge driver for connecting CMOS to CIO2
+
+---
+ drivers/platform/x86/Kconfig          |   7 +
+ drivers/platform/x86/Makefile         |   1 +
+ drivers/platform/x86/surface_camera.c | 433 ++++++++++++++++++++++++++
+ drivers/platform/x86/surface_camera.h |   2 +
+ 4 files changed, 443 insertions(+)
+ create mode 100644 drivers/platform/x86/surface_camera.c
+ create mode 100644 drivers/platform/x86/surface_camera.h
+
 diff --git a/drivers/platform/x86/Kconfig b/drivers/platform/x86/Kconfig
 index c64267319696..8c452c9f17dc 100644
 --- a/drivers/platform/x86/Kconfig
@@ -30,10 +44,10 @@ index ef0c3fcab319..60b8abcf0dff 100644
  obj-$(CONFIG_MSI_LAPTOP)	+= msi-laptop.o
 diff --git a/drivers/platform/x86/surface_camera.c b/drivers/platform/x86/surface_camera.c
 new file mode 100644
-index 000000000000..9f4361a1f776
+index 000000000000..126ae59493bd
 --- /dev/null
 +++ b/drivers/platform/x86/surface_camera.c
-@@ -0,0 +1,432 @@
+@@ -0,0 +1,433 @@
 +#include <linux/acpi.h>
 +#include <acpi/acpi_bus.h>
 +#include <linux/device.h>
@@ -93,6 +107,7 @@ index 000000000000..9f4361a1f776
 +
 +static char* supported_devices[] = {
 +    "INT33BE",
++    "INT3471",
 +    "OVTI2680",
 +    "OVTI5648",
 +};

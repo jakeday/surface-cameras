@@ -1,5 +1,21 @@
+From 65c97afd9c186164f2c411cfb286af19977ca3d0 Mon Sep 17 00:00:00 2001
+From: Jake Day <jake@ninebysix.com>
+Date: Wed, 23 Sep 2020 11:18:59 -0400
+Subject: [PATCH 3/4] ov5693 and imx135 camera sensor drivers
+
+---
+ drivers/media/i2c/Kconfig  |   24 +
+ drivers/media/i2c/Makefile |    2 +
+ drivers/media/i2c/imx135.c | 1088 +++++++++++++++++++++++++++++
+ drivers/media/i2c/ov5693.c |  738 ++++++++++++++++++++
+ drivers/media/i2c/ov5693.h | 1354 ++++++++++++++++++++++++++++++++++++
+ 5 files changed, 3206 insertions(+)
+ create mode 100644 drivers/media/i2c/imx135.c
+ create mode 100644 drivers/media/i2c/ov5693.c
+ create mode 100644 drivers/media/i2c/ov5693.h
+
 diff --git a/drivers/media/i2c/Kconfig b/drivers/media/i2c/Kconfig
-index da11036ad804..8821de007973 100644
+index 6b1a6851ccb0..53872c3c7ff8 100644
 --- a/drivers/media/i2c/Kconfig
 +++ b/drivers/media/i2c/Kconfig
 @@ -725,6 +725,19 @@ config VIDEO_HI556
@@ -62,10 +78,10 @@ index 993acab81b2c..05df9e0ca24d 100644
  obj-$(CONFIG_VIDEO_IMX258)	+= imx258.o
 diff --git a/drivers/media/i2c/imx135.c b/drivers/media/i2c/imx135.c
 new file mode 100644
-index 000000000000..356bbb2fca59
+index 000000000000..6bc7e63d81f9
 --- /dev/null
 +++ b/drivers/media/i2c/imx135.c
-@@ -0,0 +1,1246 @@
+@@ -0,0 +1,1088 @@
 +// SPDX-License-Identifier: GPL-2.0
 +/*
 + * Sony IMX135 CMOS Image Sensor Driver
@@ -91,12 +107,6 @@ index 000000000000..356bbb2fca59
 +#include <media/v4l2-device.h>
 +#include <media/v4l2-fwnode.h>
 +#include <media/v4l2-subdev.h>
-+
-+MODULE_DESCRIPTION("Sony IMX135 CMOS Image Sensor Driver");
-+MODULE_AUTHOR("Jake Day <jake@ninebysix.com>");
-+MODULE_LICENSE("GPL v2");
-+
-+ACPI_MODULE_NAME("imx135 image sensor");
 +
 +#define IMX135_STANDBY 0x0100
 +#define IMX135_REGHOLD 0x0104
@@ -139,7 +149,6 @@ index 000000000000..356bbb2fca59
 +	struct regmap *regmap;
 +
 +	struct v4l2_subdev sd;
-+	struct v4l2_fwnode_endpoint ep;
 +	struct media_pad pad;
 +	struct v4l2_mbus_framefmt current_format;
 +	const struct imx135_mode *current_mode;
@@ -963,16 +972,9 @@ index 000000000000..356bbb2fca59
 +	struct imx135 *imx135 = to_imx135(sd);
 +	int ret;
 +
-+	ret = clk_prepare_enable(imx135->xclk);
-+	if (ret) {
-+		dev_err(imx135->dev, "Failed to enable clock\n");
-+		return ret;
-+	}
-+
 +	ret = regulator_bulk_enable(IMX135_NUM_SUPPLIES, imx135->supplies);
 +	if (ret) {
 +		dev_err(imx135->dev, "Failed to enable regulators\n");
-+		clk_disable_unprepare(imx135->xclk);
 +		return ret;
 +	}
 +
@@ -989,7 +991,6 @@ index 000000000000..356bbb2fca59
 +	struct v4l2_subdev *sd = i2c_get_clientdata(client);
 +	struct imx135 *imx135 = to_imx135(sd);
 +
-+	clk_disable_unprepare(imx135->xclk);
 +	gpiod_set_value_cansleep(imx135->rst_gpio, 0);
 +	regulator_bulk_disable(IMX135_NUM_SUPPLIES, imx135->supplies);
 +
@@ -1024,9 +1025,7 @@ index 000000000000..356bbb2fca59
 +						const struct i2c_device_id *id)
 +{
 +	struct device *dev = &client->dev;
-+	struct fwnode_handle *endpoint;
 +	struct imx135 *imx135;
-+	u32 xclk_freq;
 +	int ret;
 +
 +	printk("imx135: probing new device");
@@ -1042,81 +1041,20 @@ index 000000000000..356bbb2fca59
 +		return -ENODEV;
 +	}
 +
-+	endpoint = fwnode_graph_get_next_endpoint(dev_fwnode(dev), NULL);
-+	if (!endpoint) {
-+		dev_err(dev, "Endpoint node not found\n");
-+		return -EINVAL;
-+	}
-+
-+	ret = v4l2_fwnode_endpoint_alloc_parse(endpoint, &imx135->ep);
-+	fwnode_handle_put(endpoint);
-+	if (ret) {
-+		dev_err(dev, "Parsing endpoint node failed\n");
-+		goto free_err;
-+	}
-+
-+	if (!imx135->ep.nr_of_link_frequencies) {
-+		dev_err(dev, "link-frequency property not found in DT\n");
-+		ret = -EINVAL;
-+		goto free_err;
-+	}
-+
-+	if (imx135->ep.link_frequencies[0] != IMX135_DEFAULT_LINK_FREQ) {
-+		dev_err(dev, "Unsupported link frequency\n");
-+		ret = -EINVAL;
-+		goto free_err;
-+	}
-+
-+	/* Only CSI2 is supported for now */
-+	if (imx135->ep.bus_type != V4L2_MBUS_CSI2_DPHY) {
-+		dev_err(dev, "Unsupported bus type, should be CSI2\n");
-+		ret = -EINVAL;
-+		goto free_err;
-+	}
-+
 +	/* Set default mode to max resolution */
 +	imx135->current_mode = &imx135_modes[0];
-+
-+	/* get system clock (xclk) */
-+	imx135->xclk = devm_clk_get(dev, "xclk");
-+	if (IS_ERR(imx135->xclk)) {
-+		dev_err(dev, "Could not get xclk");
-+		ret = PTR_ERR(imx135->xclk);
-+		goto free_err;
-+	}
-+
-+	ret = fwnode_property_read_u32(dev_fwnode(dev), "clock-frequency",
-+				       &xclk_freq);
-+	if (ret) {
-+		dev_err(dev, "Could not get xclk frequency\n");
-+		goto free_err;
-+	}
-+
-+	/* external clock must be 37.125 MHz */
-+	if (xclk_freq != 37125000) {
-+		dev_err(dev, "External clock frequency %u is not supported\n",
-+			xclk_freq);
-+		ret = -EINVAL;
-+		goto free_err;
-+	}
-+
-+	ret = clk_set_rate(imx135->xclk, xclk_freq);
-+	if (ret) {
-+		dev_err(dev, "Could not set xclk frequency\n");
-+		goto free_err;
-+	}
 +
 +	ret = imx135_get_regulators(dev, imx135);
 +	if (ret < 0) {
 +		dev_err(dev, "Cannot get regulators\n");
-+		goto free_err;
++		return ret;
 +	}
 +
 +	imx135->rst_gpio = devm_gpiod_get_optional(dev, "reset", GPIOD_ASIS);
 +	if (IS_ERR(imx135->rst_gpio)) {
 +		dev_err(dev, "Cannot get reset gpio\n");
 +		ret = PTR_ERR(imx135->rst_gpio);
-+		goto free_err;
++		return ret;
 +	}
 +
 +	mutex_init(&imx135->lock);
@@ -1178,8 +1116,6 @@ index 000000000000..356bbb2fca59
 +	pm_runtime_enable(dev);
 +	pm_runtime_idle(dev);
 +
-+	v4l2_fwnode_endpoint_free(&imx135->ep);
-+
 +	return 0;
 +
 +free_entity:
@@ -1187,13 +1123,11 @@ index 000000000000..356bbb2fca59
 +free_ctrl:
 +	v4l2_ctrl_handler_free(&imx135->ctrls);
 +	mutex_destroy(&imx135->lock);
-+free_err:
-+	v4l2_fwnode_endpoint_free(&imx135->ep);
 +
 +	return ret;
 +}
 +
-+/*static int imx135_remove(struct i2c_client *client)
++static int imx135_remove(struct i2c_client *client)
 +{
 +	struct v4l2_subdev *sd = i2c_get_clientdata(client);
 +	struct imx135 *imx135 = to_imx135(sd);
@@ -1210,108 +1144,32 @@ index 000000000000..356bbb2fca59
 +	pm_runtime_set_suspended(imx135->dev);
 +
 +	return 0;
-+}*/
++}
 +
-+/*#if IS_ENABLED(CONFIG_OF)
-+static const struct of_device_id imx135_of_match[] = {
-+	{ .compatible = "IMX135,INT3471" },
-+	{ }
++#ifdef CONFIG_ACPI
++static const struct acpi_device_id imx135_acpi_ids[] = {
++	{"INT3471"},
++	{}
 +};
-+MODULE_DEVICE_TABLE(of, imx135_of_match);
++
++MODULE_DEVICE_TABLE(acpi, imx135_acpi_ids);
 +#endif
 +
 +static struct i2c_driver imx135_i2c_driver = {
-+	.probe  = imx135_probe,
-+	.remove = imx135_remove,
 +	.driver = {
-+		.name  = "imx135",
++		.name = "imx135",
 +		.pm = &imx135_pm_ops,
-+		.of_match_table = of_match_ptr(imx135_of_match),
++		.acpi_match_table = ACPI_PTR(imx135_acpi_ids),
 +	},
++	.probe = imx135_probe,
++	.remove = imx135_remove,
 +};
 +
-+module_i2c_driver(imx135_i2c_driver);*/
++module_i2c_driver(imx135_i2c_driver);
 +
-+
-+static void imx135_notify(struct acpi_device *device, u32 event)
-+{
-+	// do nothing for now
-+}
-+
-+#ifdef CONFIG_PM_SLEEP
-+static int imx135_suspend(struct device *dev)
-+{
-+	return 0;
-+}
-+
-+static int imx135_resume(struct device *dev)
-+{
-+	return 0;
-+}
-+#endif
-+
-+static int imx135_add(struct acpi_device *device)
-+{
-+	const char *hid = acpi_device_hid(device);
-+	char *name;
-+	int error;
-+
-+	printk("imx135: found obj named %s", acpi_device_bid(device));
-+
-+	printk("imx135: found device named %s", acpi_device_name(device));
-+
-+	/*if (strncmp(acpi_device_bid(device), SURFACE_BUTTON_OBJ_NAME,
-+	    strlen(SURFACE_BUTTON_OBJ_NAME)))
-+		return -ENODEV;
-+
-+	button = kzalloc(sizeof(struct surface_button), GFP_KERNEL);
-+	if (!button)
-+		return -ENOMEM;
-+
-+	device->driver_data = button;
-+	button->input = input = input_allocate_device();
-+	if (!input) {
-+		error = -ENOMEM;
-+		goto err_free_button;
-+	}*/
-+
-+/* err_free_input:
-+	input_free_device(input);
-+ err_free_button:
-+	kfree(button);
-+	return error;*/
-+
-+	return 0;
-+}
-+
-+static int imx135_remove(struct acpi_device *device)
-+{
-+	return 0;
-+}
-+
-+static const struct acpi_device_id imx135_device_ids[] = {
-+	{"INT3471", 0},
-+	{"", 0},
-+};
-+MODULE_DEVICE_TABLE(acpi, imx135_device_ids);
-+
-+static SIMPLE_DEV_PM_OPS(imx135_pm,
-+		imx135_suspend, imx135_resume);
-+
-+static struct acpi_driver imx135_driver = {
-+	.name = "imx135",
-+	.class = "imx135",
-+	.owner = THIS_MODULE,
-+	.ids = imx135_device_ids,
-+	.ops = {
-+		.add = imx135_add,
-+		.remove = imx135_remove,
-+		.notify = imx135_notify,
-+	},
-+	.drv.pm = &imx135_pm,
-+};
-+
-+module_acpi_driver(imx135_driver);
++MODULE_DESCRIPTION("Sony IMX135 CMOS Image Sensor Driver");
++MODULE_AUTHOR("Jake Day <jake@ninebysix.com>");
++MODULE_LICENSE("GPL v2");
 diff --git a/drivers/media/i2c/ov5693.c b/drivers/media/i2c/ov5693.c
 new file mode 100644
 index 000000000000..640ffef95986
