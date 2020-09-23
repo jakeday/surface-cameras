@@ -6,8 +6,6 @@ Support for the Surface Cameras under Linux.
 
 ### Compiling the Kernel from Source
 
-If you don't want to use the pre-built kernel and headers, you can compile the kernel yourself following these steps:
-
 0. (Prep) Install the required packages for compiling the kernel:
   ```
   sudo apt install build-essential binutils-dev libncurses5-dev libssl-dev ccache bison flex libelf-dev
