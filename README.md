@@ -2,6 +2,8 @@
 
 Support for the Surface Cameras under Linux.
 
+
+
 ### Instructions
 
 ### Compiling the Kernel from Source
@@ -85,3 +87,11 @@ Support for the Surface Cameras under Linux.
    sudo cp acpi_override /boot
   ```
 9. Configure your bootloader to load the CPIO archive, normally by updating your grub config to add the path to the new acpi override.
+
+### Credits
+
+kitakar5525
+
+jhand2
+
+drjscally
