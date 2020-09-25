@@ -1,7 +1,7 @@
-From 5ba5115f4e6c197d2de87bf1a1002864c476d2b2 Mon Sep 17 00:00:00 2001
+From cbed992fbff19cf4f6f05c6ba839188537c14fd8 Mon Sep 17 00:00:00 2001
 From: Jake Day <jake@ninebysix.com>
-Date: Wed, 23 Sep 2020 11:13:26 -0400
-Subject: [PATCH 2/4] proper support for fwnode_graph ih software node
+Date: Fri, 25 Sep 2020 10:21:57 -0400
+Subject: [PATCH 2/5] proper support for fwnode_graph in software node
 
 ---
  drivers/base/swnode.c | 134 ++++++++++++++++++++++++++++++++++++++++--

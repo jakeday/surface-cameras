@@ -1,7 +1,7 @@
-From edc882f249e1d7a292dccb44dfedfd23f7ba6f80 Mon Sep 17 00:00:00 2001
+From b380f7d29d9f23f1a044a7b7fe02e237e536f634 Mon Sep 17 00:00:00 2001
 From: Jake Day <jake@ninebysix.com>
-Date: Wed, 23 Sep 2020 11:19:46 -0400
-Subject: [PATCH 4/4] bridge driver for connecting CMOS to CIO2
+Date: Fri, 25 Sep 2020 10:25:31 -0400
+Subject: [PATCH 5/5] bridge driver for connecting CMOS to CIO2
 
 ---
  drivers/platform/x86/Kconfig          |   7 +
