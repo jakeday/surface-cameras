@@ -2,7 +2,14 @@
 
 Support for the Surface Cameras under Linux.
 
+### Support
 
+| Device | Front Camera | Rear Camera |
+| --- | --- | --- |
+| Surface Go | IMX135 | OV2740 |
+| Surface Go 2 | IMX135 | OV2740 |
+| Surface Laptop | OV5693 | OV8865 |
+* Rear Cameras have upstream drivers and need to be connected to the bridge.
 
 ### Instructions
 
